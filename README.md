@@ -14,12 +14,29 @@ Innehåller MQTT-sensorer, lawn_mower-entitet, väderstyrd hem-skickning, robust
 - ESP32 (LOLIN32 eller liknande) flashad med [prozzerg/AMConnect](https://github.com/prozzerg/AMConnect) firmware
 - Optional: NEO-8M GPS-modul för positionsspårning
 
-**Home Assistant:**
+**Home Assistant — kärnkrav:**
 - HA 2024.6+ (testat på 2026.6)
-- MQTT-broker konfigurerad (Mosquitto-add-on funkar)
-- SMHI Weather-integration aktiverad (`weather.smhi_home`)
-- Custom cards: `mushroom`, `mini-graph-card`, `hourly-weather`
+- MQTT-broker konfigurerad
 - Mobile App integration för notiser
+
+**Home Assistant — integrationer & add-ons:**
+
+| Komponent | Var hittar man det | Vad ska den heta |
+|---|---|---|
+| **Mosquitto broker** | Settings → Add-ons → Add-on Store | "Mosquitto broker" |
+| **MQTT integration** | Settings → Devices & Services → Add Integration → MQTT | autodetekteras när Mosquitto körs |
+| **SMHI väder** | Settings → Devices & Services → Add Integration → "SMHI" | Skapar entitet `weather.smhi_home` automatiskt (för svensk plats) |
+| **HACS** | [hacs.xyz/docs/use/download/download](https://hacs.xyz/docs/use/download/download) | Krävs för custom cards nedan |
+
+**Custom Lovelace-cards (installeras via HACS → Frontend):**
+
+| Card | Vem | Repo att lägga till i HACS |
+|---|---|---|
+| Mushroom | piitaya/lovelace-mushroom | `piitaya/lovelace-mushroom` |
+| Mini Graph Card | kalkih/mini-graph-card | `kalkih/mini-graph-card` |
+| Hourly Weather | decompil/lovelace-hourly-weather | `decompil/lovelace-hourly-weather` |
+
+Efter installation: hård-refresh webbläsaren (Ctrl+Shift+R) så HA laddar in custom-cards-resurserna.
 
 ## Installation
 
@@ -130,6 +147,29 @@ Resume sker bara när ALLA tre är OFF.
 | `AM220AC/rssi` | Mower → HA | WiFi RSSI |
 | `AM220AC/lwt` | Mower → HA | Online/Offline |
 | `AM220AC/command` | HA → Mower | Kommandon (get*, setMode*, etc.) |
+
+### Väderblock-logik
+
+`AMConnect Weather Stop Triggered`-sensorn läser `weather.smhi_home` och triggar block om:
+
+| Villkor | Default-tröskel | Toggle |
+|---|---|---|
+| Regn | `state in ['rainy', 'pouring']` | `input_boolean.amconnect_gps_rain` |
+| Frost | `temperature < 3 °C` | `input_boolean.amconnect_gps_frost` |
+| Snö | `temperature < 0 °C AND precipitation > 0` | `input_boolean.amconnect_gps_snow` |
+
+På dashboarden kan du toggla om mowern ska reagera på respektive villkor. När väderblock aktiveras:
+1. `script.amconnect_gps_home` triggar (3× burst hem-kommandon + 10 min retry-loop)
+2. Notis till `notify.owner`
+3. Resume sker 30 min efter att blocket släpps (gräset hinner torka)
+
+**Om du inte använder SMHI:** Byt `weather.smhi_home` mot din väder-entitet (t.ex. `weather.openweathermap_home` eller `weather.met_no`) i sektion 4 av `automower.yaml`:
+
+```bash
+sed -i 's/weather\.smhi_home/weather.DIN_VADER/g' automower.yaml
+```
+
+Eller manuellt i text-editor — leta upp `weather.smhi_home` (3 förekomster) och byt.
 
 ### Justerbara parametrar
 
