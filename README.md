@@ -1,3 +1,6 @@
+<img width="1407" height="772" alt="Skärmavbild 2026-06-14 kl  20 06 35" src="https://github.com/user-attachments/assets/03ffbe7b-11af-4ff4-b0ab-c96028e0db1a" />
+
+
 # Husqvarna Automower 220AC — Home Assistant integration
 
 Komplett Home Assistant-paket för Husqvarna Automower 220AC (gen-2, ~2010–2012) som anslutits till HA via en ESP32-baserad [prozzerg/AMConnect](https://github.com/prozzerg/AMConnect)-modul.
