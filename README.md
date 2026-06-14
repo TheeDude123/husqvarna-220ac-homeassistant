@@ -225,10 +225,3 @@ På mowerns fysiska panel:
 ## Licens
 
 MIT — använd, modifiera och dela fritt. Inga garantier — om du gör nåt korkat och brickar mowern är det inte mitt fel.
-
-## Bidrag
-
-PRs välkomna. Speciellt intresserad av:
-- Bekräftelse att paketet funkar med 230 ACX (samma generation)
-- Förbättringar av sessions-detektionen
-- Stöd för fler firmware-forks (dixie007 m.fl.)
