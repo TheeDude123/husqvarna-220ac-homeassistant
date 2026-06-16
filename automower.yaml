@@ -57,6 +57,16 @@ input_boolean:
   amconnect_session_had_error:
     name: "Session hade fel (intern markör)"
     icon: mdi:alert-circle
+  # Markör som sätts om sessionen avbröts externt:
+  # - Väderblock aktiverades (regn, frost, snö)
+  # - Manuellt block aktiverades (du klickade)
+  # - Hund ute aktiverades
+  # - Klippschemats fönster tog slut (mowern på väg hem pga schema-end)
+  # I alla fall: sessionen var inte batteribegränsad, så den ska INTE
+  # användas för att bedöma batterihälsa. Resetas vid session-start.
+  amconnect_session_externally_ended:
+    name: "Session avbruten externt (intern markör)"
+    icon: mdi:cancel
 
 input_datetime:
   amconnect_gps_mahmesser_ersetzt:
@@ -971,9 +981,18 @@ template:
         unique_id: amconnect_last_session_length_v3
         unit_of_measurement: "min"
         icon: mdi:timer-outline
+        # Returnerar föregående state RAW (inte float(0) → annars korrupteras
+        # statistik med 0-värden vid första körning efter restart/rename).
+        # Samma state-värde som föregående = ingen state_changed-event = ingen
+        # ny statistik-sample. unknown stannar som unknown.
+        #
+        # Skipreglar (ingen ny datapunkt registreras):
+        #   - had_error: mowern fastnade/fel under sessionen
+        #   - externally_ended: block aktiverades eller schemat tog slut
         state: >-
-          {%- if is_state('input_boolean.amconnect_session_had_error', 'on') -%}
-            {{ states('sensor.amconnect_last_session_length_v3') | float(0) }}
+          {%- if is_state('input_boolean.amconnect_session_had_error', 'on')
+             or is_state('input_boolean.amconnect_session_externally_ended', 'on') -%}
+            {{ states('sensor.amconnect_last_session_length_v3') }}
           {%- else -%}
             {%- set start_str = states('input_datetime.amconnect_session_start') -%}
             {%- if start_str not in ['unknown', 'unavailable', '', none] -%}
@@ -982,10 +1001,10 @@ template:
               {%- if elapsed_min > 0.5 and elapsed_min < 100 -%}
                 {{ elapsed_min | round(1) }}
               {%- else -%}
-                {{ states('sensor.amconnect_last_session_length_v3') | float(0) }}
+                {{ states('sensor.amconnect_last_session_length_v3') }}
               {%- endif -%}
             {%- else -%}
-              {{ states('sensor.amconnect_last_session_length_v3') | float(0) }}
+              {{ states('sensor.amconnect_last_session_length_v3') }}
             {%- endif -%}
           {%- endif -%}
 
@@ -1343,7 +1362,41 @@ automation:
         data:
           timestamp: "{{ now().timestamp() }}"
       - service: input_boolean.turn_off
-        target: { entity_id: input_boolean.amconnect_session_had_error }
+        target:
+          entity_id:
+            - input_boolean.amconnect_session_had_error
+            - input_boolean.amconnect_session_externally_ended
+    mode: single
+
+  # --- Markera session som externt avbruten ------------------------------
+  # Triggar om något block aktiveras, ELLER om klippschemats fönster tar
+  # slut, MEDAN mowern är ute. Sessionen var då inte batteribegränsad och
+  # ska inte räknas i batterihälsa-statistiken.
+  - alias: "Automower – Markera session som externt avbruten"
+    id: automower_session_mark_externally_ended
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.automower_weather_block
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.automower_manual_block
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.automower_dog_outside
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.automower_inom_klippschema
+        to: "off"
+    conditions:
+      # Bara om mowern ÄR ute när detta händer — om hon redan står dockad
+      # är detta inte ett pågående-session-avbrott utan bara state-info.
+      - condition: template
+        value_template: >-
+          {{ states('sensor.amconnect_gps_status') not in
+             ['Laden', 'Wartet in Ladestation', 'Wartet auf Einsatz', 'Stop'] }}
+    actions:
+      - service: input_boolean.turn_on
+        target: { entity_id: input_boolean.amconnect_session_externally_ended }
     mode: single
 
   # --- Markera session som "smutsig" om fel inträffar --------------------
